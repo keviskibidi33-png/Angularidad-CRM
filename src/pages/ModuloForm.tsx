@@ -448,6 +448,7 @@ export default function ModuloForm() {
 
     const save = useCallback(async (download: boolean) => {
 
+
         if (!moduleConfig) return
 
         const payload = moduleConfig.derive(form) as GenericPayload
@@ -466,9 +467,11 @@ export default function ModuloForm() {
 
         try {
 
+            let savedId = ensayoId
+
             if (download) {
 
-                const { blob, filename } = await saveAndDownload(moduleConfig.apiSlug, payload, ensayoId ?? undefined)
+                const { blob, ensayoId: returnedId, filename } = await saveAndDownload(moduleConfig.apiSlug, payload, ensayoId ?? undefined)
 
                 downloadBlob(
 
@@ -478,21 +481,35 @@ export default function ModuloForm() {
 
                 )
 
+                if (returnedId) savedId = returnedId
+
             } else {
 
-                await saveEnsayo(moduleConfig.apiSlug, payload, ensayoId ?? undefined)
+                const saved = await saveEnsayo(moduleConfig.apiSlug, payload, ensayoId ?? undefined)
+
+                savedId = saved.id
 
             }
 
+            // Preservar ID para ediciones posteriores sin crear duplicados
+            if (savedId && savedId !== ensayoId) {
 
+                setEnsayoId(savedId)
+
+                localStorage.removeItem(`${moduleConfig.draftKey}:new`)
+
+                const newUrl = new URL(window.location.href)
+
+                newUrl.searchParams.set('ensayo_id', String(savedId))
+
+                window.history.replaceState(null, '', newUrl.toString())
+
+            }
 
             localStorage.removeItem(`${moduleConfig.draftKey}:${ensayoId ?? 'new'}`)
 
-            setForm(moduleConfig.derive(moduleConfig.defaultState()))
-
-            setEnsayoId(null)
-
-            if (window.parent !== window) window.parent.postMessage({ type: 'CLOSE_MODAL' }, '*')
+            // El formulario queda cargado para seguir editando
+            if (window.parent !== window) window.parent.postMessage({ type: 'ENSAYO_SAVED' }, '*')
 
             toast.success(download ? `${moduleConfig.title} guardado y descargado.` : `${moduleConfig.title} guardado.`)
 
